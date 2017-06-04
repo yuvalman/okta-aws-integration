@@ -35,22 +35,6 @@ okta_user_assume_role_for_all_resources_policy_document = {
 
 okta_user_assume_role_for_all_resources_policy_document = json.dumps(okta_user_assume_role_for_all_resources_policy_document)
 
-
-# okta API
-okta_api_access_token = conf_vars['okta_api_access_token']
-okta_api_org = conf_vars['okta_api_org']
-headers = {'Accept': 'application/json', 'Content-Type': 'application/json',
-           "Authorization": 'SSWS {0}'.format(okta_api_access_token)}
-
-
-list_okta_apps = "https://{0}.okta.com/api/v1/apps?limit=200".format(okta_api_org)
-request_for_get_okta_apps = requests.get(list_okta_apps, headers=headers)
-get_okta_apps = request_for_get_okta_apps.json()
-list_okta_users = "https://{0}.okta.com/api/v1/users?limit=200".format(okta_api_org)
-request_for_get_okta_users = requests.get(list_okta_users, headers=headers)
-get_okta_users = request_for_get_okta_users.json()
-
-
 for account_name, account_id in accounts.items():
     session = boto3.Session(profile_name=account_name)
     iam = session.client('iam')
