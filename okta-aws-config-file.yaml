@@ -1,0 +1,10 @@
+accounts:
+  pm : <pm account id>
+  dev : <dev account id>
+  ops : <ops account id>
+
+okta_api_access_token: <Your Okta org api access token>
+
+okta_api_org: <Your Okta Org>
+
+user_email_domain : <Your users email domain>

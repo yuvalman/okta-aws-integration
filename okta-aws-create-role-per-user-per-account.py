@@ -1,3 +1,19 @@
+########
+# Copyright (c) 2017 GigaSpaces Technologies Ltd. All rights reserved
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#        http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+#    * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#    * See the License for the specific language governing permissions and
+#    * limitations under the License.
+
+
 import boto3
 import json
 import requests
@@ -5,15 +21,18 @@ import yaml
 import logging
 
 
-def config_var(config_file_path):
+def _config_var(config_file_path):
     with open(config_file_path) as config:
         conf_vars = yaml.load(config.read())
         return conf_vars
 
-
-logging.basicConfig(level=logging.INFO)
+log_format =\
+    '[%(asctime)s] {%(filename)s:%(lineno)d} %(levelname)s - %(message)s'
+logging.basicConfig(
+    format=log_format, datefmt='%m-%d %H:%M:%S', level=logging.INFO)
 logger = logging.getLogger(__name__)
-conf_vars = config_var(
+
+conf_vars = _config_var(
     '/home/yuvalm-pcu/Documents/scripts/okta-aws-config.yaml')
 accounts = conf_vars['accounts']
 
@@ -59,68 +78,100 @@ okta_user_assume_role_for_all_resources_policy_document = \
 for account_name, account_id in accounts.items():
     session = boto3.Session(profile_name=account_name)
     iam = session.client('iam')
-    logger.info('Working on {0}'.format(account_name))
+    logger.info('Working on {0} aws account'.format(account_name))
     for app in get_okta_apps:
         if account_name == app['label']:
-            logger.info(
-                'Creating identity porvider in {0} aws account'.format(
-                    account_name))
-            okta_app_metadata = \
-                'https://{2}.okta.com/api/v1/apps/{0}/sso/saml/'\
-                'metadata?kid={1}'.format(app['id'],
-                                          app['credentials']['signing']['kid'],
-                                          okta_api_org)
-            request_for_get_okta_app_metadata = requests.get(
-                okta_app_metadata, headers=xml_headers)
-            get_okta_app_metadata = request_for_get_okta_app_metadata.content
-            response = iam.create_saml_provider(
-                SAMLMetadataDocument=get_okta_app_metadata,
-                Name='Okta'
-            )
-
+            identity_provider_name = 'Okta'
+            try:
+                logger.info(
+                    'Creating the identity porvider: {1} in'
+                    ' {0} aws account'.format(
+                        account_name, identity_provider_name))
+                okta_app_metadata = \
+                    'https://{2}.okta.com/api/v1/apps/{0}/sso/saml/'\
+                    'metadata?kid={1}'.format(
+                        app['id'],
+                        app['credentials']['signing']['kid'],
+                        okta_api_org)
+                request_for_get_okta_app_metadata = requests.get(
+                    okta_app_metadata, headers=xml_headers)
+                get_okta_app_metadata =\
+                    request_for_get_okta_app_metadata.content
+                response = iam.create_saml_provider(
+                    SAMLMetadataDocument=get_okta_app_metadata,
+                    Name=identity_provider_name
+                )
+            except iam.exceptions.EntityAlreadyExistsException:
+                logger.warning('The Identity provider {0} is already exist, '
+                               'you can change the Identity provider name for '
+                               'creating a new Identity provider'.format(
+                                identity_provider_name))
+    okta_user_with_permissions = 'OktaSSO'
+    okta_group_with_permissions = 'OktaSSO-Group'
     logger.info(
         'Creating user with permission for listing and assuming all '
         'roles in {0} aws account'.format(account_name))
     try:
-        iam.create_user(UserName='OktaSSO')
+        iam.create_user(UserName=okta_user_with_permissions)
     except iam.exceptions.EntityAlreadyExistsException:
         logger.warning(
-            'The user already exist, '
-            'you can change the user name for creating a new user')
+            'The user {0} already exist, '
+            'you can change the user name for creating a new user'.format(
+                okta_user_with_permissions))
     try:
-        iam.create_group(GroupName='OktaSSO-Group')
+        iam.create_group(GroupName=okta_group_with_permissions)
     except iam.exceptions.EntityAlreadyExistsException:
-        logger.warning('The group already exist, '
+        logger.warning('The group {0} already exist, '
                        'you can change the group name for '
-                       'creating a new group')
+                       'creating a new group'.format(
+                        okta_group_with_permissions))
+
+    okta_user_list_all_roles_policy_name = 'okta_user_list_all_roles_policy'
     try:
         okta_user_list_all_roles_policy = \
             iam.create_policy(
-                PolicyName='okta_user_list_all_roles_policy',
+                PolicyName=okta_user_list_all_roles_policy_name,
                 PolicyDocument=okta_user_list_all_roles_policy_document)
     except iam.exceptions.EntityAlreadyExistsException:
         logger.warning(
-            'The policy already exist, '
+            'The policy {0} already exist, '
             'you can change the policy'
-            ' name for creating a new policy')
+            ' name for creating a new policy'.format(
+                okta_user_list_all_roles_policy_name))
+
+    okta_user_assume_role_for_all_resources_policy_name =\
+        'okta_user_assume_role_for_all_resources_policy'
     try:
         okta_user_assume_role_for_all_resources_policy =\
             iam.create_policy(
-                PolicyName='okta_user_assume_role_for_all_resources_policy',
+                PolicyName=okta_user_assume_role_for_all_resources_policy_name,
                 PolicyDocument=okta_user_assume_role_for_all_resources_policy_document)
     except iam.exceptions.EntityAlreadyExistsException:
         logger.warning(
-            'The policy already exist, '
-            'you can change the policy name for creating a new policy')
-    okta_user_list_all_roles_policy_arn =\
+            'The policy {0} already exist, '
+            'you can change the policy name'
+            ' for creating a new policy'.format(
+                okta_user_assume_role_for_all_resources_policy_name))
+    try:
+        okta_user_list_all_roles_policy_arn =\
         okta_user_list_all_roles_policy['Policy']['Arn']
-    okta_user_assume_role_for_all_resources_policy_arn =\
+    except NameError:
+        okta_user_list_all_roles_policy_arn =\
+            'arn:aws:iam::{0}:policy/' \
+            'okta_user_list_all_roles_policy'.format(account_id)
+    try:
+        okta_user_assume_role_for_all_resources_policy_arn =\
         okta_user_assume_role_for_all_resources_policy['Policy']['Arn']
-    iam.attach_group_policy(GroupName='OktaSSO-Group',
+    except NameError:
+        okta_user_assume_role_for_all_resources_policy_arn =\
+            'arn:aws:iam::{0}:policy/' \
+            'okta_user_assume_role_for_all_resources_policy'.format(account_id)
+    iam.attach_group_policy(GroupName=okta_group_with_permissions,
                             PolicyArn=okta_user_list_all_roles_policy_arn)
-    iam.attach_group_policy(GroupName='OktaSSO-Group',
+    iam.attach_group_policy(GroupName=okta_group_with_permissions,
                             PolicyArn=okta_user_assume_role_for_all_resources_policy_arn)
-    iam.add_user_to_group(GroupName='OktaSSO-Group', UserName='OktaSSO')
+    iam.add_user_to_group(GroupName=okta_group_with_permissions,
+                          UserName=okta_user_with_permissions)
 
     assume_role_for_identity_provider_access = {
         "Version": "2012-10-17",
@@ -200,7 +251,6 @@ for account_name, account_id in accounts.items():
                         UserName=username, PolicyName=inline_policy)
                 user_inline_policy_document =\
                     json.dumps(user_inline_policy_details['PolicyDocument'])
-                print user_inline_policy_document
                 try:
                     new_aws_managed_policy =\
                         iam.create_policy(
@@ -223,7 +273,6 @@ for account_name, account_id in accounts.items():
                             PolicyDocument=user_inline_policy_document)
                 new_aws_managed_policy_arn =\
                     new_aws_managed_policy['Policy']['Arn']
-                print new_aws_managed_policy_arn
                 try:
                     iam.attach_role_policy(
                         PolicyArn=new_aws_managed_policy_arn,
@@ -246,7 +295,6 @@ for account_name, account_id in accounts.items():
         for attached_policy in\
                 list_user_attached_policies_details['AttachedPolicies']:
             user_attached_policy_arn = attached_policy['PolicyArn']
-            print user_attached_policy_arn
             try:
                 iam.attach_role_policy(
                     PolicyArn=user_attached_policy_arn, RoleName=role_name)
@@ -281,8 +329,7 @@ for account_name, account_id in accounts.items():
                             PolicyArn=inline_policy_arn, RoleName=role_name)
                     except iam.exceptions.NoSuchEntityException:
                         inline_policy_arn =\
-                            'arn:aws:iam::aws:policy/{1}'.format(
-                                account_id, inline_policy)
+                            'arn:aws:iam::aws:policy/{0}'.format(inline_policy)
                         iam.attach_role_policy(
                             PolicyArn=inline_policy_arn, RoleName=role_name)
                     except iam.exceptions.ClientError:
@@ -296,7 +343,6 @@ for account_name, account_id in accounts.items():
                     group_inline_policy_details =\
                         iam.get_group_policy(
                             GroupName=group_name, PolicyName=inline_policy)
-                    print group_inline_policy_details['PolicyDocument']
                     group_inline_policy_document =\
                         json.dumps(
                             group_inline_policy_details['PolicyDocument'])
@@ -346,7 +392,6 @@ for account_name, account_id in accounts.items():
             for attached_policy in\
                     list_group_attached_policies_details['AttachedPolicies']:
                 group_attached_policy_arn = attached_policy['PolicyArn']
-                print group_attached_policy_arn
                 try:
                     iam.attach_role_policy(
                         PolicyArn=group_attached_policy_arn,

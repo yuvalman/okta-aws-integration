@@ -1,3 +1,18 @@
+########
+# Copyright (c) 2017 GigaSpaces Technologies Ltd. All rights reserved
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#        http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+#    * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#    * See the License for the specific language governing permissions and
+#    * limitations under the License.
+
 import boto3
 import json
 import requests
@@ -17,7 +32,7 @@ logger = logging.getLogger(__name__)
 conf_vars = config_var(
     '/home/yuvalm-pcu/Documents/scripts/okta-aws-config.yaml')
 accounts = conf_vars['accounts']
-
+user_email_domain = conf_vars['user_email_domain']
 # okta API
 okta_api_access_token = conf_vars['okta_api_access_token']
 okta_api_org = conf_vars['okta_api_org']
@@ -40,7 +55,7 @@ get_okta_users = request_for_get_okta_users.json()
 xml_headers = {'Accept': 'application/xml',
                'Content-Type': 'application/json',
                "Authorization": 'SSWS {0}'.format(okta_api_access_token)}
-logger.info('Start assining user to aws app with the appropriate SAML role')
+logger.info('Start assigning users to aws app with the appropriate SAML role')
 for account_name, account_id in accounts.items():
     session = boto3.Session(profile_name=account_name)
     iam = session.client('iam')
@@ -48,18 +63,18 @@ for account_name, account_id in accounts.items():
     list_users = list_users_paginator.paginate()
     list_user_details = list_users.build_full_result()
     for user in list_user_details['Users']:
-        username = user['UserName']
-        role_name = '{0}-{1}'.format(username, account_name)
+        aws_username = user['UserName']
+        role_name = '{0}-{1}'.format(aws_username, account_name)
         for app in get_okta_apps:
             if app['name'] == 'amazon_aws':
                 for okta_user in get_okta_users:
                     okta_user_name =\
-                        '{0}@gigaspaces.com'.format(username.lower())
+                        '{0}@{1}'.format(aws_username.lower(),user_email_domain)
                     okta_user_login = okta_user['profile']['login'].lower()
                     if okta_user_name == okta_user_login:
                         okta_user_id = okta_user['id']
                         data = {"id": okta_user_id, "scope": "USER",
-                                "credentials": {"userName": username},
+                                "credentials": {"userName": aws_username},
                                 'profile': {"samlRoles": [role_name]}}
                         get_users_in_app =\
                             "https://{1}.okta.com/api/v1/" \
@@ -70,3 +85,4 @@ for account_name, account_id in accounts.items():
                             requests.post(
                                 get_users_in_app,
                                 data=json.dumps(data), headers=headers)
+logger.info('Finished assigning users to aws app with the appropriate SAML role')
