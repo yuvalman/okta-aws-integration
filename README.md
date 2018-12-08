@@ -11,7 +11,7 @@ The tool take all the user's policies that the user has from his groups and his
 inner policies and create a SAML role that can be assigned to the user in Okta
 
 
-##Setup
+## Setup
 
 Before getting started you will have to set up your enviornment:
 
@@ -57,7 +57,7 @@ user_email_domain : <Your users email domain>
 ```
 Create "Amazon Web Services" app in your Okta admin console for every account that you manage. You can use this [guide](https://support.okta.com/help/servlet/fileField?retURL=%2Fhelp%2Farticles%2FKnowledge_Article%2FAmazon-Web-Services-and-Okta-Integration-Guide&entityId=ka0F0000000MeyyIAC&field=File_Attachment__Body__s)(Page 16-20) for creating the aws app.
 
-##Run
+## Run
 
 - Run okta-aws-create-role-per-user-per-account.py script.
 
